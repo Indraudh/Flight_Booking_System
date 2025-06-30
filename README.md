@@ -6,7 +6,7 @@
 2.Display a list of all registered passengers.
 3.Retrieve passenger data based on passenger ID.
 # # 2. Flight Management
-1.Maintain a list of available flights with attributes like flight number, airline, route, times, price, and seat availability.
+1.Maintain a list of available flights with attributes like flight number, airline, route, times, price, and seat availability.//
 2.Display all available flights.
 3.Search for flights based on origin and destination with availability check.
 # # 3. Booking Management
