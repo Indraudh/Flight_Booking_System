@@ -14,7 +14,7 @@
 2.View booking details using booking ID.
 3.Cancel bookings and update seat availability accordingly.
 4.Display all bookings associated with a particular passenger.
-# User Interface / Interaction
+# 4. User Interface / Interaction
 1.Present a console-based interactive menu with options 1–9.
 2.Accept and handle user inputs via the command line.
 3.Support input validation for menu choices and data fields.
