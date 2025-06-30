@@ -53,9 +53,26 @@ class Flight {
     @Override
     public String toString() {
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
-        return String.format("Flight %s (%s): %s → %s\nDeparture: %s | Arrival: %s\nPrice: $%.2f | Available Seats: %d/%d",
-                flightNumber, airline, origin, destination,
-                departureTime.format(formatter), arrivalTime.format(formatter),
-                price, availableSeats, totalSeats);
+        return String.format(
+                """
+                ╔════════════════════════════════════════════════════════════════════╗
+                ║                        ✈️  FLIGHT INFORMATION                      ║
+                ╠════════════════════════════════════════════════════════════════════╣
+                ║ Flight      : %-10s (%s)                                           ║
+                ║ Route       : %s → %s                                              ║
+                ║ Departure   : %s                                                   ║
+                ║ Arrival     : %s                                                   ║
+                ║ Price       : $%.2f                                                ║
+                ║ Seats       : %d available out of %d                               ║
+                ╚════════════════════════════════════════════════════════════════════╝
+                """,
+                flightNumber, airline,
+                origin, destination,
+                departureTime.format(formatter),
+                arrivalTime.format(formatter),
+                price,
+                availableSeats, totalSeats
+        );
     }
+
 }

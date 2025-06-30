@@ -1,4 +1,9 @@
+import java.io.PrintWriter;
+import java.sql.Connection;
+import java.sql.Timestamp;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.InputMismatchException;
 import java.util.List;
@@ -18,47 +23,89 @@ public class FlightBookingSystem {
         this.bookingCounter = 1;
         this.passengerCounter = 1;
         initializeFlights();
+        loadPassengers();
+        loadBookings();
     }
 
     // Initialize some sample flights
     private void initializeFlights() {
-        flights.add(new Flight("AI101", "Air India", "Delhi", "Mumbai",
-                LocalDateTime.of(2024, 7, 15, 8, 30),
-                LocalDateTime.of(2024, 7, 15, 10, 45), 5500.0, 180));
+        try (Connection conn = DatabaseHelper.getConnection();
+             var stmt = ((Connection) conn).createStatement();
+             var rs = stmt.executeQuery("SELECT * FROM flights")) {
 
-        flights.add(new Flight("6E202", "IndiGo", "Mumbai", "Bangalore",
-                LocalDateTime.of(2024, 7, 15, 14, 15),
-                LocalDateTime.of(2024, 7, 15, 15, 30), 4200.0, 150));
-
-        flights.add(new Flight("SG303", "SpiceJet", "Bangalore", "Chennai",
-                LocalDateTime.of(2024, 7, 16, 9, 0),
-                LocalDateTime.of(2024, 7, 16, 10, 30), 3800.0, 160));
-
-        flights.add(new Flight("UK404", "Vistara", "Chennai", "Kolkata",
-                LocalDateTime.of(2024, 7, 16, 16, 45),
-                LocalDateTime.of(2024, 7, 16, 19, 15), 6200.0, 140));
+            while (rs.next()) {
+                flights.add(new Flight(
+                        rs.getString("flightNumber"),
+                        rs.getString("airline"),
+                        rs.getString("origin"),
+                        rs.getString("destination"),
+                        rs.getTimestamp("departureTime").toLocalDateTime(),
+                        rs.getTimestamp("arrivalTime").toLocalDateTime(),
+                        rs.getDouble("price"),
+                        rs.getInt("totalSeats")
+                ));
+            }
+            System.out.println("✅ Flights loaded from database successfully.");
+        } catch (Exception e) {
+            System.out.println("❌ Error loading flights: " + e.getMessage());
+        }
     }
 
-    // Search flights by origin and destination
-    public List<Flight> searchFlights(String origin, String destination) {
+    // Search flights by origin and destination and date
+    public List<Flight> searchFlights(String origin, String destination, LocalDate date) {
         List<Flight> result = new ArrayList<>();
         for (Flight flight : flights) {
-            if (flight.getOrigin().equalsIgnoreCase(origin) &&
-                    flight.getDestination().equalsIgnoreCase(destination) &&
-                    flight.getAvailableSeats() > 0) {
+            if (
+                    flight.getOrigin().equalsIgnoreCase(origin) &&
+                            flight.getDestination().equalsIgnoreCase(destination) &&
+                            flight.getDepartureTime().toLocalDate().equals(date) &&
+                            flight.getAvailableSeats() > 0
+            ) {
                 result.add(flight);
             }
         }
         return result;
     }
 
+
     // Register a new passenger
     public Passenger registerPassenger(String firstName, String lastName, String email, String phoneNumber, int age) {
+        if (!phoneNumber.matches("\\d{10}")) {
+            System.out.println("❌ Invalid phone number! Must be 10 digits.");
+            return null;
+        }
+        if (!email.contains("@")) {
+            System.out.println("❌ Invalid email address! Must contain '@'.");
+            return null;
+        }
+        if (age <= 0) {
+            System.out.println("❌ Invalid age! Must be greater than 0.");
+            return null;
+        }
+
         String passengerId = "P" + String.format("%04d", passengerCounter++);
         Passenger passenger = new Passenger(passengerId, firstName, lastName, email, phoneNumber, age);
-        passengers.add(passenger);
+
+        try (Connection conn = DatabaseHelper.getConnection();
+             var pstmt = conn.prepareStatement(
+                     "INSERT INTO passengers (passengerId, firstName, lastName, email, phoneNumber, age) VALUES (?, ?, ?, ?, ?, ?)")) {
+            pstmt.setString(1, passengerId);
+            pstmt.setString(2, firstName);
+            pstmt.setString(3, lastName);
+            pstmt.setString(4, email);
+            pstmt.setString(5, phoneNumber);
+            pstmt.setInt(6, age);
+
+            pstmt.executeUpdate();
+            System.out.println("✅ Passenger stored in database.");
+        } catch (Exception e) {
+            System.out.println("❌ Error storing passenger: " + e.getMessage());
+        }
+
+        passengers.add(passenger); // still keep in memory to display in the menu
         return passenger;
     }
+
 
     // Book a flight ticket
     public Booking bookTicket(Passenger passenger, String flightNumber) {
@@ -85,12 +132,32 @@ public class FlightBookingSystem {
         // Generate booking ID and seat number
         String bookingId = "BK" + String.format("%06d", bookingCounter++);
         String seatNumber = generateSeatNumber(selectedFlight);
+        LocalDateTime bookingTime = LocalDateTime.now();
 
         Booking booking = new Booking(bookingId, passenger, selectedFlight, seatNumber);
         bookings.add(booking);
 
+        // Insert booking into DB
+        try (Connection conn = DatabaseHelper.getConnection();
+             var pstmt = conn.prepareStatement(
+                     "INSERT INTO bookings (bookingId, passengerId, flightNumber, seatNumber, bookingTime, status) VALUES (?, ?, ?, ?, ?, ?)")) {
+
+            pstmt.setString(1, bookingId);
+            pstmt.setString(2, passenger.getPassengerId());
+            pstmt.setString(3, flightNumber);
+            pstmt.setString(4, seatNumber);
+            pstmt.setTimestamp(5, Timestamp.valueOf(bookingTime));
+            pstmt.setString(6, "CONFIRMED");
+
+            pstmt.executeUpdate();
+            System.out.println("✅ Booking saved to database.");
+        } catch (Exception e) {
+            System.out.println("❌ Error saving booking: " + e.getMessage());
+        }
+
         return booking;
     }
+
 
     // Generate seat number
     private String generateSeatNumber(Flight flight) {
@@ -102,16 +169,39 @@ public class FlightBookingSystem {
 
     // Cancel booking
     public boolean cancelBooking(String bookingId) {
-        for (Booking booking : bookings) {
-            if (booking.getBookingId().equals(bookingId) && booking.getStatus().equals("CONFIRMED")) {
-                booking.cancelBooking();
-                System.out.println("Booking " + bookingId + " has been cancelled successfully.");
-                return true;
+        boolean success = false;
+
+        try (Connection conn = DatabaseHelper.getConnection();
+             var pstmt = conn.prepareStatement(
+                     "UPDATE bookings SET status = ? WHERE bookingId = ? AND status = ?")) {
+            pstmt.setString(1, "CANCELLED");
+            pstmt.setString(2, bookingId);
+            pstmt.setString(3, "CONFIRMED");
+
+            int rows = pstmt.executeUpdate();
+
+            if (rows > 0) {
+                System.out.println("✅ Booking " + bookingId + " cancelled and updated in DB.");
+                success = true;
+
+                // also update the seats:
+                // get flight number
+                for (Booking b : bookings) {
+                    if (b.getBookingId().equals(bookingId)) {
+                        b.cancelBooking(); // only if present in memory
+                    }
+                }
+            } else {
+                System.out.println("⚠️ Booking not found or already cancelled in DB.");
             }
+        } catch (Exception e) {
+            System.out.println("❌ Error cancelling booking in DB: " + e.getMessage());
         }
-        System.out.println("Booking not found or already cancelled.");
-        return false;
+
+        return success;
     }
+
+
 
     // Get booking details
     public Booking getBookingDetails(String bookingId) {
@@ -150,19 +240,105 @@ public class FlightBookingSystem {
         }
     }
 
+    // load passengers
+    private void loadPassengers() {
+        try (Connection conn = DatabaseHelper.getConnection();
+             var stmt = conn.createStatement();
+             var rs = stmt.executeQuery("SELECT * FROM passengers")) {
+
+            while (rs.next()) {
+                String passengerId = rs.getString("passengerId");
+                String firstName = rs.getString("firstName");
+                String lastName = rs.getString("lastName");
+                String email = rs.getString("email");
+                String phoneNumber = rs.getString("phoneNumber");
+                int age = rs.getInt("age");
+
+                Passenger passenger = new Passenger(passengerId, firstName, lastName, email, phoneNumber, age);
+                passengers.add(passenger);
+            }
+
+            System.out.println("✅ Loaded passengers from database: " + passengers.size());
+        } catch (Exception e) {
+            System.out.println("❌ Error loading passengers: " + e.getMessage());
+        }
+
+        if (!passengers.isEmpty()) {
+            String lastPid = passengers.get(passengers.size() - 1).getPassengerId(); // e.g., P0004
+            int num = Integer.parseInt(lastPid.substring(1));
+            passengerCounter = num + 1;
+        }
+
+    }
+
+    // Load Booking from DB
+    private void loadBookings() {
+        try (Connection conn = DatabaseHelper.getConnection();
+             var stmt = conn.createStatement();
+             var rs = stmt.executeQuery("SELECT * FROM bookings")) {
+
+            while (rs.next()) {
+                String bookingId = rs.getString("bookingId");
+                String passengerId = rs.getString("passengerId");
+                String flightNumber = rs.getString("flightNumber");
+                String seatNumber = rs.getString("seatNumber");
+                LocalDateTime bookingTime = rs.getTimestamp("bookingTime").toLocalDateTime();
+                String status = rs.getString("status");
+
+                // Find passenger from list
+                Passenger passenger = findPassenger(passengerId);
+
+                // Find flight from list
+                Flight flight = null;
+                for (Flight f : flights) {
+                    if (f.getFlightNumber().equals(flightNumber)) {
+                        flight = f;
+                        break;
+                    }
+                }
+
+                if (passenger != null && flight != null) {
+                    Booking booking = new Booking(bookingId, passenger, flight, seatNumber);
+
+                    // manually set status from DB
+                    if (status.equalsIgnoreCase("CANCELLED")) {
+                        booking.cancelBooking();
+                    }
+
+                    bookings.add(booking);
+                }
+            }
+
+            System.out.println("✅ Loaded bookings from database: " + bookings.size());
+        } catch (Exception e) {
+            System.out.println("❌ Error loading bookings: " + e.getMessage());
+        }
+
+        if (!bookings.isEmpty()) {
+            // set bookingCounter to max ID + 1
+            String lastId = bookings.get(bookings.size() - 1).getBookingId(); // e.g., BK000123
+            int numericPart = Integer.parseInt(lastId.substring(2));  // get 123
+            bookingCounter = numericPart + 1;
+        }
+    }
+
+
+
     // Display main menu
     public void displayMenu() {
+
         System.out.println("\n=== FLIGHT BOOKING SYSTEM MENU ===");
         System.out.println("1. Register New Passenger");
         System.out.println("2. Display All Available Flights");
-        System.out.println("3. Search Flights by Route");
+        System.out.println("3. Search Flights by Route and Date");
         System.out.println("4. Book Flight Ticket");
         System.out.println("5. View Booking Details");
         System.out.println("6. View Passenger Bookings");
         System.out.println("7. Cancel Booking");
         System.out.println("8. Display All Passengers");
-        System.out.println("9. Exit");
-        System.out.print("Enter your choice (1-9): ");
+        System.out.println("9. Export Passenger Bookings to CSV");
+        System.out.println("10. Exit");
+        System.out.print("Enter your choice (1-10): ");
     }
 
     // Find passenger by ID
@@ -188,10 +364,61 @@ public class FlightBookingSystem {
         }
     }
 
+    // Export Bookings
+
+    public void exportPassengerBookings(String passengerId) {
+        Passenger passenger = findPassenger(passengerId);
+
+        if (passenger == null) {
+            System.out.println("❌ Passenger not found.");
+            return;
+        }
+
+        String fileName = passenger.getPassengerId() + "_bookings.csv";
+
+        try (PrintWriter pw = new PrintWriter(fileName)) {
+            pw.println("BookingId,PassengerName,FlightNumber,Origin,Destination,Departure,SeatNumber,Status");
+
+            for (Booking booking : bookings) {
+                if (booking.getPassenger().getPassengerId().equals(passengerId)) {
+                    pw.printf(
+                            "%s,%s,%s,%s,%s,%s,%s,%s%n",
+                            booking.getBookingId(),
+                            booking.getPassenger().getFullName(),
+                            booking.getFlight().getFlightNumber(),
+                            booking.getFlight().getOrigin(),
+                            booking.getFlight().getDestination(),
+                            booking.getFlight().getDepartureTime(),
+                            booking.getSeatNumber(),
+                            booking.getStatus()
+                    );
+                }
+            }
+            System.out.println("✅ Bookings exported to file: " + fileName);
+        } catch (Exception e) {
+            System.out.println("❌ Error exporting CSV: " + e.getMessage());
+        }
+    }
+
+
     // Main method with switch-case menu
     public static void main(String[] args) {
-        FlightBookingSystem system = new FlightBookingSystem();
         Scanner scanner = new Scanner(System.in);
+
+        System.out.println("=== ADMIN LOGIN ===");
+        System.out.print("Username: ");
+        String username = scanner.nextLine();
+        System.out.print("Password: ");
+        String password = scanner.nextLine();
+
+        if (!username.equals("admin") || !password.equals("admin123")) {
+            System.out.println("❌ Invalid admin credentials! Exiting...");
+            return;
+        }
+        System.out.println("✅ Admin login successful!");
+
+
+        FlightBookingSystem system = new FlightBookingSystem();
         boolean running = true;
 
         System.out.println("=== WELCOME TO FLIGHT BOOKING SYSTEM ===");
@@ -233,16 +460,24 @@ public class FlightBookingSystem {
                         String origin = scanner.nextLine();
                         System.out.print("Enter destination city: ");
                         String destination = scanner.nextLine();
+                        System.out.print("Enter departure date (yyyy-MM-dd): ");
+                        String dateStr = scanner.nextLine();
 
-                        List<Flight> searchResults = system.searchFlights(origin, destination);
-                        if (searchResults.isEmpty()) {
-                            System.out.println("No flights found for the route: " + origin + " → " + destination);
-                        } else {
-                            System.out.println("\n=== SEARCH RESULTS: " + origin + " → " + destination + " ===");
-                            for (Flight flight : searchResults) {
-                                System.out.println(flight);
-                                System.out.println("---");
+                        try {
+                            LocalDate date = LocalDate.parse(dateStr);
+                            List<Flight> searchResults = system.searchFlights(origin, destination, date);
+
+                            if (searchResults.isEmpty()) {
+                                System.out.println("No flights found for the route: " + origin + " → " + destination + " on " + date);
+                            } else {
+                                System.out.println("\n=== SEARCH RESULTS: " + origin + " → " + destination + " on " + date + " ===");
+                                for (Flight flight : searchResults) {
+                                    System.out.println(flight);
+                                    System.out.println("---");
+                                }
                             }
+                        } catch (DateTimeParseException e) {
+                            System.out.println("❌ Invalid date format! Please use yyyy-MM-dd.");
                         }
                         break;
 
@@ -316,7 +551,16 @@ public class FlightBookingSystem {
                         system.displayAllPassengers();
                         break;
 
-                    case 9: // Exit
+
+                    case 9: // export to csv
+                        System.out.println("\n=== EXPORT PASSENGER BOOKINGS ===");
+                        System.out.print("Enter Passenger ID: ");
+                        String pid = scanner.nextLine();
+                        system.exportPassengerBookings(pid);
+                        break;
+
+
+                    case 10: // Exit
                         System.out.println("\nThank you for using Flight Booking System!");
                         System.out.println("Have a safe journey! ✈️");
                         running = false;

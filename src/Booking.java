@@ -33,23 +33,41 @@ class Booking {
     @Override
     public String toString() {
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
-        return String.format("=== BOOKING CONFIRMATION ===\n" +
-                        "Booking ID: %s\n" +
-                        "Status: %s\n" +
-                        "Passenger: %s\n" +
-                        "Flight: %s (%s)\n" +
-                        "Route: %s → %s\n" +
-                        "Departure: %s\n" +
-                        "Seat: %s\n" +
-                        "Total Amount: $%.2f\n" +
-                        "Booking Time: %s\n" +
-                        "============================",
-                bookingId, status, passenger.getFullName(),
-                flight.getFlightNumber(), flight.getAirline(),
+        String border = "=============================================";
+        return String.format(
+                "%s\n" +
+                        "|              ✈️  FLIGHT TICKET               |\n" +
+                        "%s\n" +
+                        "| Booking ID : %-30s |\n" +
+                        "| Passenger  : %-30s |\n" +
+                        "| Status     : %-30s |\n" +
+                        "%s\n" +
+                        "| Flight     : %-30s |\n" +
+                        "| Airline    : %-30s |\n" +
+                        "| Route      : %-14s → %-13s |\n" +
+                        "| Departure  : %-30s |\n" +
+                        "| Seat       : %-30s |\n" +
+                        "%s\n" +
+                        "| Amount Paid: $%-29.2f |\n" +
+                        "| Booked On  : %-30s |\n" +
+                        "%s",
+                border,
+                border,
+                bookingId,
+                passenger.getFullName(),
+                status,
+                border,
+                flight.getFlightNumber(),
+                flight.getAirline(),
                 flight.getOrigin(), flight.getDestination(),
                 flight.getDepartureTime().format(formatter),
-                seatNumber, flight.getPrice(),
-                bookingTime.format(formatter));
+                seatNumber,
+                border,
+                flight.getPrice(),
+                bookingTime.format(formatter),
+                border
+        );
     }
+
 }
 
