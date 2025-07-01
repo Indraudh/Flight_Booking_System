@@ -1,5 +1,6 @@
 # Flight_Booking_System
-![Class Diagram](https://github.com/user-attachments/assets/e6c62289-1055-4ebd-934c-8b8b2b9f773b)
+![class diagram flight management system](https://github.com/user-attachments/assets/13b41ef4-15a3-4634-a37a-d6bb5846f5dd)
+
 # Key Features
 # 1. Passenger Management
 1.Register new passengers with details like name, email, phone, and age.
