@@ -1,4 +1,6 @@
 // Flight class to represent flight information
+import java.sql.Connection;
+import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 class Flight {
@@ -39,6 +41,16 @@ class Flight {
     public boolean bookSeat() {
         if (availableSeats > 0) {
             availableSeats--;
+            try{
+                Connection conn = DatabaseHelper.getConnection();
+                var pstmt = conn.prepareStatement("UPDATE flights SET availableSeats = ? WHERE flightNumber = ?");{
+                        pstmt.setString(1, String.valueOf(availableSeats));
+                        pstmt.setString(2,this.flightNumber);
+                        pstmt.executeUpdate();
+                }
+            } catch (SQLException e) {
+                throw new RuntimeException(e);
+            }
             return true;
         }
         return false;
@@ -47,6 +59,16 @@ class Flight {
     public void cancelSeat() {
         if (availableSeats < totalSeats) {
             availableSeats++;
+            try{
+                Connection conn = DatabaseHelper.getConnection();
+                var pstmt = conn.prepareStatement("UPDATE flights SET availableSeats = ? WHERE flightNumber = ?");{
+                    pstmt.setString(1, String.valueOf(availableSeats));
+                    pstmt.setString(2,this.flightNumber);
+                    pstmt.executeUpdate();
+                }
+            } catch (SQLException e) {
+                throw new RuntimeException(e);
+            }
         }
     }
 

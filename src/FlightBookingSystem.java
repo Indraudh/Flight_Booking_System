@@ -45,7 +45,7 @@ public class FlightBookingSystem {
                         rs.getInt("totalSeats")
                 ));
             }
-            System.out.println("✅ Flights loaded from database successfully.");
+            // System.out.println("✅ Flights loaded from database successfully.");
         } catch (Exception e) {
             System.out.println("❌ Error loading flights: " + e.getMessage());
         }
@@ -179,21 +179,46 @@ public class FlightBookingSystem {
             pstmt.setString(3, "CONFIRMED");
 
             int rows = pstmt.executeUpdate();
-
             if (rows > 0) {
                 System.out.println("✅ Booking " + bookingId + " cancelled and updated in DB.");
                 success = true;
 
                 // also update the seats:
+
                 // get flight number
                 for (Booking b : bookings) {
                     if (b.getBookingId().equals(bookingId)) {
                         b.cancelBooking(); // only if present in memory
                     }
                 }
+                try (Connection conn1 = DatabaseHelper.getConnection();
+                     var pstmt1 = conn1.prepareStatement("SELECT flightNumber FROM bookings WHERE bookingId = ?")) {
+
+                    pstmt1.setString(1, bookingId);
+
+                    try (var rs = pstmt1.executeQuery()) {
+                        if (rs.next()) {
+                            String flightNumber = rs.getString("flightNumber");
+
+                            // find the flight in memory
+                            for (Flight f : flights) {
+                                if (f.getFlightNumber().equals(flightNumber)) {
+                                    f.cancelSeat();  // increase availableSeats
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+
+                } catch (Exception e) {
+                    System.out.println("❌ Error updating available seats after cancel: " + e.getMessage());
+                }
+
             } else {
                 System.out.println("⚠️ Booking not found or already cancelled in DB.");
             }
+
         } catch (Exception e) {
             System.out.println("❌ Error cancelling booking in DB: " + e.getMessage());
         }
@@ -258,7 +283,7 @@ public class FlightBookingSystem {
                 passengers.add(passenger);
             }
 
-            System.out.println("✅ Loaded passengers from database: " + passengers.size());
+            // System.out.println("✅ Loaded passengers from database: " + passengers.size());
         } catch (Exception e) {
             System.out.println("❌ Error loading passengers: " + e.getMessage());
         }
@@ -309,7 +334,7 @@ public class FlightBookingSystem {
                 }
             }
 
-            System.out.println("✅ Loaded bookings from database: " + bookings.size());
+            // System.out.println("✅ Loaded bookings from database: " + bookings.size());
         } catch (Exception e) {
             System.out.println("❌ Error loading bookings: " + e.getMessage());
         }
@@ -585,7 +610,6 @@ public class FlightBookingSystem {
                 scanner.nextLine(); // clear any remaining input
             }
         }
-
         scanner.close();
     }
 }
